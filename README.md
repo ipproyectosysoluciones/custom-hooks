@@ -1,6 +1,6 @@
 # custom-hooks
 
-En este repositorio, hemos implementado y probado varios custom hooks que pueden ser reutilizados en diferentes proyectos. A continuación, se describe cada uno de los hooks implementados y cómo pueden ser utilizados.
+En este repositorio, he implementado y probado varios custom hooks que pueden ser reutilizados en diferentes proyectos. A continuación, se describe cada uno de los hooks implementados y cómo pueden ser utilizados.
 
 ## Hooks Implementados
 
@@ -12,27 +12,31 @@ Este hook es utilizado para gestionar un contador con funciones para incrementar
 import { useState } from 'react';
 
 export const useCounter = ( initialValue = 10 ) => {
-    const [counter, setCounter] = useState(initialValue);
+  
+  const [ counter, setCounter ] = useState( initialValue );
 
-    const increment = (value = 1) => {
-        setCounter(counter + value);
-    }
+  const increment = ( value = 1 ) => {
+    setCounter( ( current ) => current + value );
+  };
 
-    const decrement = (value = 1) => {
-        setCounter(counter - value);
-    }
+  const decrement = ( value = 1 ) => {
+    
+    if ( counter === 0 ) return;
 
-    const reset = () => {
-        setCounter(initialValue);
-    }
+    setCounter( ( current ) => current - value );
+  };
 
-    return {
-        counter,
-        increment,
-        decrement,
-        reset,
-    };
-}
+  const reset = () => {
+    setCounter( initialValue );
+  };
+
+  return {
+    counter,
+    increment,
+    decrement,
+    reset,
+  };
+};
 ```
 
 ### 2. useFetch
@@ -40,48 +44,85 @@ export const useCounter = ( initialValue = 10 ) => {
 Este hook es utilizado para realizar solicitudes HTTP y manejar el estado de carga, errores y datos recibidos.
 
 ```javascript
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-export const useFetch = (url) => {
-    const [state, setState] = useState({
+const localCache = {};
+
+export const useFetch = ( url ) => {
+  
+  const [ state, setState ] = useState({
+    data: null,
+    isLoading: true,
+    hasError: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    getFetch();
+  }, [ url ]);
+
+  const setLoadingState = () => {
+    setState({
+      data: null,
+      isLoading: true,
+      hasError: false,
+      error: null,
+    });
+  };
+
+  const getFetch = async () => {
+
+    if (localCache[ url ]) {
+      console.log( 'Usando cache' );
+      
+      setState({
+        data: localCache[ url ],
+        isLoading: false,
+        hasError: false,
+        error: null,
+      });
+      return;
+    };
+    
+    setLoadingState();
+
+    const resp = await fetch( url );
+
+    await new Promise(( resolve ) => setTimeout( resolve, 1500 ));
+
+    if ( !resp.ok ) {
+      
+      setState({
         data: null,
-        isLoading: true,
-        hasError: null,
+        isLoading: false,
+        hasError: true,
+        error: {
+          status: resp.status,
+          statusText: resp.statusText,
+        },
+      });
+      return;
+    };
+
+    const data = await resp.json();
+
+    setState({
+      data: data,
+      isLoading: false,
+      hasError: false,
+      error: null,
     });
 
-    const getFetch = async () => {
-        setState({
-            ...state,
-            isLoading: true,
-        });
+    localCache[ url ] = data;
+  };
+  
+  return {
+    data: state.data,
+    isLoading: state.isLoading,
+    hasError: state.hasError,
+  };
+};
 
-        try {
-            const resp = await fetch(url);
-            const data = await resp.json();
-            setState({
-                data,
-                isLoading: false,
-                hasError: null,
-            });
-        } catch (error) {
-            setState({
-                ...state,
-                isLoading: false,
-                hasError: error,
-            });
-        }
-    }
-
-    useEffect(() => {
-        getFetch();
-    }, [url]);
-
-    return {
-        data: state.data,
-        isLoading: state.isLoading,
-        hasError: state.hasError,
-    };
-}
 ```
 
 ### 3. useForm
@@ -91,28 +132,30 @@ Este hook es utilizado para gestionar el estado de un formulario y proporcionar 
 ```javascript
 import { useState } from 'react';
 
-export const useForm = (initialForm = {}) => {
-    const [formState, setFormState] = useState(initialForm);
+export const useForm = ( initialForm = {} ) => {
+  
+  const [ formState, setFormState ] = useState( initialForm );
 
-    const onInputChange = ({ target }) => {
-        const { name, value } = target;
-        setFormState({
-            ...formState,
-            [name]: value,
-        });
-    }
+  const onInputChange = ({ target }) => {
+    const { name, value } = target;
 
-    const onResetForm = () => {
-        setFormState(initialForm);
-    }
+    setFormState({
+      ...formState,
+      [ name ]: value,
+    });
+  };
 
-    return {
-        ...formState,
-        formState,
-        onInputChange,
-        onResetForm,
-    };
-}
+  const onResetForm = () => {
+    setFormState( initialForm );
+  };
+
+  return {
+    ...formState, 
+    formState, 
+    onInputChange, 
+    onResetForm, 
+  };
+};
 ```
 
 ### 4. useTodos
@@ -120,63 +163,62 @@ export const useForm = (initialForm = {}) => {
 Este hook es utilizado para gestionar una lista de tareas, permitiendo agregar, eliminar y marcar tareas como completadas.
 
 ```javascript
-import { useReducer } from 'react';
-import { todoReducer } from '../08-useReducer/todoReducer';
+import { useEffect, useReducer } from 'react';
+import { todoReducer } from './todoReducer';
 
-const initialState = [];
+const init = () => {
+  return JSON.parse(localStorage.getItem( 'todos' )) || [];
+};
 
 export const useTodos = () => {
-    const [todos, dispatch] = useReducer(todoReducer, initialState);
+ 
+  const [ todos, dispatch ] = useReducer( todoReducer, [], init );
 
-    const handleNewTodo = (todo) => {
-        dispatch({
-            type: '[TODO] Add Todo',
-            payload: todo,
-        });
-    }
+  useEffect(() => {
+    localStorage.setItem( 'todos', JSON.stringify( todos ));
+  }, [ todos ]);
 
-    const handleDeleteTodo = (id) => {
-        dispatch({
-            type: '[TODO] Remove Todo',
-            payload: id,
-        });
-    }
-
-    const handleToggleTodo = (id) => {
-        dispatch({
-            type: '[TODO] Toggle Todo',
-            payload: id,
-        });
-    }
-
-    return {
-        todos,
-        todosCount: todos.length,
-        pendingTodosCount: todos.filter(todo => !todo.done).length,
-        handleNewTodo,
-        handleDeleteTodo,
-        handleToggleTodo,
+  const handleNewTodo = ( todo ) => {
+    const action = {
+      type: "[TODO] Add Todo",
+      payload: todo,
     };
-}
+
+    dispatch(action);
+  };
+
+  const handleDeleteTodo = ( id ) => {
+    dispatch({
+      type: '[TODO] Remove Todo',
+      payload: id,
+    });
+  };
+
+  const handleToggleTodo = ( id ) => {
+    dispatch({
+      type: '[TODO] Toggle Todo',
+      payload: id,
+    });
+  };
+
+  return {
+    todos,
+    todosCount: todos.length,
+    pendingTodosCount: todos.filter( todo => !todo.done ).length,
+    handleNewTodo,
+    handleDeleteTodo,
+    handleToggleTodo,
+  };
+};
 ```
 
-## Subir código a nuestro repositorio
+## Clonar Repositorio
 
-Para subir el código de tus custom hooks a tu repositorio, sigue estos pasos:
-
-1. Asegúrate de tener Git instalado en tu máquina.
-2. Clona tu repositorio o navega a tu directorio de trabajo.
-3. Añade los archivos de tus custom hooks.
-4. Realiza un commit con un mensaje descriptivo.
-5. Sube los cambios a tu repositorio remoto.
+Para clonar este repositorio solo debes de seguir este comando:
 
 ```sh
-git clone <URL_DE_TU_REPOSITORIO>
-cd <NOMBRE_DEL_DIRECTORIO>
-# Añade tus archivos de custom hooks
-git add .
-git commit -m "Añadir custom hooks useCounter, useFetch, useForm y useTodos"
-git push origin main
+git clone https://github.com/ipproyectosysoluciones/custom-hooks.git
+cd custom-hooks
 ```
 
 ## Mantén tu repositorio ordenado
