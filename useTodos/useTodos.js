@@ -1,6 +1,6 @@
 // Importaciones necesarias desde React y el archivo del reducer de tareas
 import { useEffect, useReducer } from 'react';
-import { todoReducer } from '../08-useReducer';
+import { todoReducer } from './todoReducer';
 
 // Función de inicialización para obtener los todos desde el localStorage
 const init = () => {
